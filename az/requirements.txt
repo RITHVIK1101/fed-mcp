@@ -1,6 +1,0 @@
-fastapi
-uvicorn
-azure-identity
-azure-mgmt-resource
-openai
-python-dotenv

@@ -9,7 +9,7 @@ from openai import AzureOpenAI
 script_dir = os.path.dirname(os.path.realpath(__file__))
 os.chdir(script_dir)
 
-# Load .env file
+# .env file
 load_dotenv()
 
 # Set up Azure GPT client
@@ -55,7 +55,7 @@ Only respond with one word: 'azure' or 'aws'."""
         label = response.choices[0].message.content.strip().lower()
         return label if label in ['azure', 'aws'] else 'aws'
     except Exception as e:
-        print(f"❌ Classification failed: {e}")
+        print(f"Classification failed: {e}")
         return 'aws'
 
 def route_to_client(label, prompt):
@@ -79,9 +79,9 @@ def route_to_client(label, prompt):
         return result.stdout.strip()
 
     except FileNotFoundError as e:
-        return f"❌ Client file not found: {e}"
+        return f"Client file not found: {e}"
     except Exception as e:
-        return f"❌ Error routing request: {e}"
+        return f"Error routing request: {e}"
 
 def test_prerequisites():
     """
@@ -99,7 +99,7 @@ def test_prerequisites():
             errors.append(f"Missing env var: {var}")
 
     if errors:
-        print("❌ Prerequisites check failed:")
+        print("Prerequisites check failed:")
         for e in errors:
             print(f"  • {e}")
         return False
@@ -111,16 +111,16 @@ def main():
     Main entry point for router
     """
     if not test_prerequisites():
-        print("💡 Fix the issues above and try again")
+        print("Fix the issues above and try again")
         return
 
     if len(sys.argv) < 2:
-        print("❌ No prompt provided.")
+        print("No prompt provided.")
         return
 
     prompt = " ".join(sys.argv[1:]).strip()
     if not prompt:
-        print("❌ Empty prompt.")
+        print(" Empty prompt.")
         return
 
     label = classify_prompt(prompt)

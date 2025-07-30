@@ -1,10 +1,10 @@
 import os, sys, json, asyncio, subprocess
 from dotenv import load_dotenv
 from typing import Dict, Any, List
-from openai import OpenAI
+from openai import OpenAI #openai clone for claude sdk
 
 load_dotenv()
-
+# initialize OpenAI client for Claude and .env
 client = OpenAI(
     api_key=os.getenv("CLAUDE_API_KEY"),
     base_url=os.getenv("CLAUDE_API_BASE", "https://api.anthropic.com/v1")
@@ -13,7 +13,7 @@ client = OpenAI(
 def validate_schema(schema: Dict[str, Any]) -> bool:
     schema_str = json.dumps(schema)
     return not any(p in schema_str for p in ["str | None", "string | null", '"anyOf"', '"oneOf"'])
-
+## cleaning out the complex schema items in teh JSON input params
 def clean_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(schema, dict):
         cleaned = {}
@@ -35,17 +35,17 @@ async def run(prompt: str):
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
 
-    # Try `uv tool run` first
+    #uv tool run
     server_params = StdioServerParameters(
         command="uv",
         args=["tool", "run", "awslabs.aws-documentation-mcp-server@latest"]
     )
-
+## start server/open read/write pipe
     async with stdio_client(server_params) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
-            tools_response = await session.list_tools()
-
+            tools_response = await session.list_tools() ## all tools fetched
+  
             tools = []
             for tool in tools_response.tools:
                 if tool.inputSchema and validate_schema(tool.inputSchema):
@@ -57,15 +57,16 @@ async def run(prompt: str):
                             "description": tool.description or f"AWS Tool: {tool.name}",
                             "parameters": cleaned
                         }
-                    })
+                    })## filters invalid schemas. type: function, parameters are valid.
 
-            # Round 1: Let Claude choose tool
+            # Claude choose tool, user prompt + tools to Claude
             response = client.chat.completions.create(
                 model=os.getenv("CLAUDE_MODEL", "claude-3-sonnet-20240229"),
                 messages=[{"role": "user", "content": prompt}],
                 tools=tools,
                 max_tokens=4000
             )
+            ## response from Claude
             resp_msg = response.choices[0].message
 
             messages = [{"role": "user", "content": prompt}, resp_msg.model_dump()]
@@ -73,6 +74,7 @@ async def run(prompt: str):
             # Tool usage
             if resp_msg.tool_calls:
                 for call in resp_msg.tool_calls:
+                    #Store the output (or error) as a new messag
                     try:
                         args = json.loads(call.function.arguments)
                         result = await session.call_tool(call.function.name, args)
@@ -91,7 +93,9 @@ async def run(prompt: str):
                             "content": f"Tool call failed: {e}"
                         })
 
-                # Final answer from Claude
+                # Final answer from Claude -- second call
+                # Claude sees: The original user prompt. The tool it picked. The tool output. And it generates a final, helpful answer
+
                 final = client.chat.completions.create(
                     model=os.getenv("CLAUDE_MODEL", "claude-3-sonnet-20240229"),
                     messages=messages,
@@ -99,36 +103,7 @@ async def run(prompt: str):
                 )
                 print(final.choices[0].message.content)
             else:
-                # Claude gave direct answer
+             
                 print(resp_msg.content)
 
-async def fallback(prompt: str):
-    fallback_prompt = f"""
-    You are an AWS expert. Please answer this question with best practices, examples, and clarity:
 
-    {prompt}
-    """
-    try:
-        response = client.chat.completions.create(
-            model=os.getenv("CLAUDE_MODEL", "claude-3-sonnet-20240229"),
-            messages=[{"role": "user", "content": fallback_prompt}],
-            max_tokens=4000
-        )
-        print(response.choices[0].message.content)
-    except Exception as e:
-        print(f"❌ Claude fallback error: {e}")
-
-async def main():
-    if len(sys.argv) < 2:
-        print("❌ No prompt received.")
-        return
-    prompt = " ".join(sys.argv[1:])
-
-    try:
-        await run(prompt)
-    except Exception as e:
-        print(f"⚠️ MCP failed, using fallback Claude response: {e}")
-        await fallback(prompt)
-
-if __name__ == "__main__":
-    asyncio.run(main())
